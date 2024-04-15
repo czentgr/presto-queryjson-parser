@@ -2,8 +2,15 @@
 # json to parquet tables
  
 import json
+import string
 import sys
 import os
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--stagestate', nargs='?', const=False, type=bool)
+parser.add_argument('--path')
+args = parser.parse_args()
 
 def time_val(tstr):
   time = 0
@@ -21,20 +28,20 @@ def time_val(tstr):
     time = wh * 60 * 60 + part * 60 * 60 / 100
   return time
  
-if (len(sys.argv) != 2):
+if (args.path == ""):
   print("Specify the input json file or directory")
- 
+
 jsonfiles = []
 
-if os.path.isfile(sys.argv[1]):
-  jsonfiles.append(sys.argv[1])
+if os.path.isfile(args.path):
+  jsonfiles.append(args.path)
 else:
-  for subdir, dirs, files in os.walk(sys.argv[1]):
+  for subdir, dirs, files in os.walk(args.path):
      for file in files:
         jsonfiles.append(os.path.join(subdir, file))
 
 failed = []
-slow_queries = []
+queries = []
 for file in jsonfiles:
   jsonfile = open(file)
   data = json.load(jsonfile)
@@ -43,15 +50,23 @@ for file in jsonfiles:
   root['file'] = file;
   if (data['state'] == 'FAILED'):
     failed.append(file)
-    continue
+
+  if (args.stagestate) :
+    stages = []
+    stages.append(data['outputStage'])
+    while (len(stages) > 0):
+      stage = stages.pop(0)
+      offset = stage['stageId'].index('.')
+      stageId = stage['stageId'][offset + 1:]
+      state = stage['latestAttemptExecutionInfo']['state']
+      print("Stage " + stageId + ' : ' + state)
+      stages += stage['subStages']
+    print()
 
   root['query'] = data['query'];
-
   queryStats = data['queryStats'];
   root['execTime'] = queryStats['executionTime'];
   timeVal = time_val(root['execTime'])
-  if (timeVal < 120) :
-    continue
 
   root['totalTasks'] = queryStats['totalTasks'];
   root['peakRunningTasks'] = queryStats['peakRunningTasks'];
@@ -64,26 +79,33 @@ for file in jsonfiles:
   summaries = []
   for s in opSummaries:
     opVal = time_val(s['getOutputWall'])
-    if (opVal > 3600) :
-       summaries.append({'id':str(s['stageId']) + '-' + s['operatorType'] + '-' + str(s['totalDrivers']),
-                         'outputWallTime':s['getOutputWall'],
-                         'addInputWall':s['addInputWall'],
+    if (opVal > 0) :
+       summaries.append((time_val(s['getOutputWall']), 
+                        {'s':s['stageId'],
+                         'p':s['planNodeId'],
+                         'o':s['operatorType'],
+                         'd':s['totalDrivers'],
+                         'outputWall':s['getOutputWall'],
+                         'inputWall':s['addInputWall'],
                          'blockedWall':s['blockedWall'],
-                        });
-  root['opSummaries'] = summaries;
+                         'outputRows':s['outputPositions'], 
+                        }));
+  
+  sorted_summaries = sorted(summaries, key = lambda x: x[0], reverse = True)
+  root['opSummaries'] = sorted_summaries;
   jsonfile.close()
-  slow_queries.append((timeVal, root));
-
+  queries.append((timeVal, root));
 
 #failed
-print('Failed Queries:')
-for query in failed:
-  print(query)
-print('')
+if (len(failed) > 0):
+  print('Failed Queries:')
+  for query in failed:
+    print(query)
+  print()
 
-sorted_slow_queries = sorted(slow_queries, key = lambda x: x[0], reverse = True)[:25] 
-print('Slow Queries')
-for query in sorted_slow_queries:
+sorted_queries = sorted(queries, key = lambda x: x[0], reverse = True) 
+print('Sorted Queries')
+for query in sorted_queries:
   print('execTime : ' + query[1]['execTime'] + '(' + str(query[0])  + 's)')
   print('file : ' + query[1]['file'])
   print('totalTasks : ' + str(query[1]['totalTasks']))
@@ -92,5 +114,5 @@ for query in sorted_slow_queries:
   print('totalBlockedTime : ' + query[1]['totalBlockedTime'])
   print('shuffledDataSize : ' + query[1]['shuffledDataSize'])
   for summary in query[1]['opSummaries']:
-    print(summary)
+    print(summary[1])
   print('')
