@@ -64,7 +64,7 @@ for file in jsonfiles:
       stages += stage['subStages']
     sorted_states = sorted(states, key = lambda x: x[0])
     for state in sorted_states:
-      print(state)
+      print(state[1])
     print()
 
   root['query'] = data['query'];
@@ -109,6 +109,7 @@ if (len(failed) > 0):
 
 sorted_queries = sorted(queries, key = lambda x: x[0], reverse = True) 
 print('Sorted Queries')
+print('s: stageId, p: planNode, o: operatorName, d:DriverCount')
 for query in sorted_queries:
   print('execTime : ' + query[1]['execTime'] + '(' + str(query[0])  + 's)')
   print('file : ' + query[1]['file'])
