@@ -8,7 +8,8 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--stagestate', nargs='?', const=False, type=bool)
+parser.add_argument('--stagestate', action='store_true')
+parser.set_defaults(stagestate=False)
 parser.add_argument('--path')
 args = parser.parse_args()
 
@@ -63,9 +64,7 @@ for file in jsonfiles:
       states.append((int(stageId), {"Stage " + stageId + ' : ' + state}))
       stages += stage['subStages']
     sorted_states = sorted(states, key = lambda x: x[0])
-    for state in sorted_states:
-      print(state[1])
-    print()
+    root['stageState'] = sorted_states
 
   root['query'] = data['query'];
   queryStats = data['queryStats'];
@@ -118,6 +117,11 @@ for query in sorted_queries:
   print('totalCpuTime : ' + str(query[1]['totalCpuTime']))
   print('totalBlockedTime : ' + query[1]['totalBlockedTime'])
   print('shuffledDataSize : ' + query[1]['shuffledDataSize'])
+  if ('stageState' in query[1]):
+    print('Stage State')
+    for state in query[1]['stageState']:
+      print(state[1])
+  print('Operators')
   for summary in query[1]['opSummaries']:
     print(summary[1])
   print('')
