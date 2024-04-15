@@ -2,7 +2,7 @@
 A Python parser to read Presto query json files
 Given a path to a query json file or a folder with query json files, the parser
 1) Filters failed queries.
-2) Sorts queries from slowest to fastest.
+2) Sorts queries from slowest to fastest and prints operators with outputWall greater than a second.
 3) Optionally prints the state of the stages.
 
 Usage:  
@@ -14,7 +14,7 @@ $ python queryjson.py --path ~/jsonfiles/q9.opt+.json --stagestate
 Sorted Queries  
 s: stageId, p: planNode, o: operatorName, d:DriverCount  
 execTime : 1.41m(84.6s)  
-file : ~/jsonfiles/berthold/q9.opt+.json  
+file : ~/jsonfiles/q9.opt+.json  
 totalTasks : 77  
 peakRunningTasks : 76  
 totalCpuTime : 1.07d  
