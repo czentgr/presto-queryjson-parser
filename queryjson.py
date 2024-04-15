@@ -53,14 +53,18 @@ for file in jsonfiles:
 
   if (args.stagestate) :
     stages = []
+    states = []
     stages.append(data['outputStage'])
     while (len(stages) > 0):
       stage = stages.pop(0)
       offset = stage['stageId'].index('.')
       stageId = stage['stageId'][offset + 1:]
       state = stage['latestAttemptExecutionInfo']['state']
-      print("Stage " + stageId + ' : ' + state)
+      states.append((int(stageId), {"Stage " + stageId + ' : ' + state}))
       stages += stage['subStages']
+    sorted_states = sorted(states, key = lambda x: x[0])
+    for state in sorted_states:
+      print(state)
     print()
 
   root['query'] = data['query'];
