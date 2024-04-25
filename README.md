@@ -18,12 +18,12 @@ Options:
                      (Default: 0)
 ```
 
-The program can be executed as a program or as input to python3.
+The program can be executed as a program or as input to python3.  
 `python3 queryjson.py [options] path` is equivalent to `queryjson.py [options] path`.
 
 Example:
 ```
-$ python3 queryjson.py --path ~/jsonfiles/q9.opt+.json --stagestate  
+$ python3 queryjson.py ~/jsonfiles/q9.opt+.json --stagestate
 Sorted Queries  
 s: stageId, p: planNode, o: operatorName, d:DriverCount  
 execTime : 1.41m(84.6s)  
