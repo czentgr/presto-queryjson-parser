@@ -1,17 +1,18 @@
+#!/usr/bin/env python3
+
 # Python program to convert
 # json to parquet tables
  
 import json
-import string
 import sys
 import os
-import argparse
+from optparse import OptionParser
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--stagestate', action='store_true')
-parser.set_defaults(stagestate=False)
-parser.add_argument('--path')
-args = parser.parse_args()
+def create_parser():
+  parser = OptionParser(prog='queryjson', usage='usage: %prog [options] path', description="Analyze a Presto Query JSON document. If multiple queries are provided the output is ordered by execution time longest to shortest.")
+  parser.add_option('--stagestate', action='store_true', default=False, help='Collect and print stage and state information')
+  parser.add_option('--opwall', action='store', default=0, type="int", dest="opwall_s", help='Operator Wall time in seconds to show operator details (Default: 0)')
+  return parser
 
 def time_val(tstr):
   time = 0
@@ -28,100 +29,115 @@ def time_val(tstr):
     part = int(tstr[-3:-1])
     time = wh * 60 * 60 + part * 60 * 60 / 100
   return time
- 
-if (args.path == ""):
-  print("Specify the input json file or directory")
 
-jsonfiles = []
 
-if os.path.isfile(args.path):
-  jsonfiles.append(args.path)
-else:
-  for subdir, dirs, files in os.walk(args.path):
-     for file in files:
-        jsonfiles.append(os.path.join(subdir, file))
-
-failed = []
-queries = []
-for file in jsonfiles:
-  jsonfile = open(file)
-  data = json.load(jsonfile)
-
-  root = {}
-  root['file'] = file;
-  if (data['state'] == 'FAILED'):
-    failed.append(file)
-
-  if (args.stagestate) :
-    stages = []
-    states = []
-    stages.append(data['outputStage'])
-    while (len(stages) > 0):
-      stage = stages.pop(0)
-      offset = stage['stageId'].index('.')
-      stageId = stage['stageId'][offset + 1:]
-      state = stage['latestAttemptExecutionInfo']['state']
-      states.append((int(stageId), {"Stage " + stageId + ' : ' + state}))
-      stages += stage['subStages']
-    sorted_states = sorted(states, key = lambda x: x[0])
-    root['stageState'] = sorted_states
-
-  root['query'] = data['query'];
-  queryStats = data['queryStats'];
-  root['execTime'] = queryStats['executionTime'];
-  timeVal = time_val(root['execTime'])
-
-  root['totalTasks'] = queryStats['totalTasks'];
-  root['peakRunningTasks'] = queryStats['peakRunningTasks'];
-  root['totalDrivers'] = queryStats['totalDrivers'];
-  root['totalCpuTime'] = queryStats['totalCpuTime'];
-  root['totalBlockedTime'] = queryStats['totalBlockedTime'];
-  root['shuffledDataSize'] = queryStats['shuffledDataSize']; 
-
-  opSummaries = queryStats['operatorSummaries'];
-  summaries = []
-  for s in opSummaries:
-    opVal = time_val(s['getOutputWall'])
-    if (opVal > 0) :
-       summaries.append((time_val(s['getOutputWall']), 
-                        {'s':s['stageId'],
-                         'p':s['planNodeId'],
-                         'o':s['operatorType'],
-                         'd':s['totalDrivers'],
-                         'outputWall':s['getOutputWall'],
-                         'inputWall':s['addInputWall'],
-                         'blockedWall':s['blockedWall'],
-                         'outputRows':s['outputPositions'], 
-                        }));
-  
-  sorted_summaries = sorted(summaries, key = lambda x: x[0], reverse = True)
-  root['opSummaries'] = sorted_summaries;
-  jsonfile.close()
-  queries.append((timeVal, root));
-
-#failed
-if (len(failed) > 0):
+def printFailed(queries):
   print('Failed Queries:')
-  for query in failed:
+  for query in queries:
     print(query)
-  print()
-
-sorted_queries = sorted(queries, key = lambda x: x[0], reverse = True) 
-print('Sorted Queries')
-print('s: stageId, p: planNode, o: operatorName, d:DriverCount')
-for query in sorted_queries:
-  print('execTime : ' + query[1]['execTime'] + '(' + str(query[0])  + 's)')
-  print('file : ' + query[1]['file'])
-  print('totalTasks : ' + str(query[1]['totalTasks']))
-  print('peakRunningTasks : ' + str(query[1]['peakRunningTasks']))
-  print('totalCpuTime : ' + str(query[1]['totalCpuTime']))
-  print('totalBlockedTime : ' + query[1]['totalBlockedTime'])
-  print('shuffledDataSize : ' + query[1]['shuffledDataSize'])
-  if ('stageState' in query[1]):
-    print('Stage State')
-    for state in query[1]['stageState']:
-      print(state[1])
-  print('Operators')
-  for summary in query[1]['opSummaries']:
-    print(summary[1])
   print('')
+
+def printSorted(queries):
+  sorted_queries = sorted(queries, key = lambda x: x[0], reverse = True) 
+  print('Sorted Queries')
+  print('s: stageId, p: planNode, o: operatorName, d:DriverCount')
+  for query in sorted_queries:
+    print('execTime : ' + query[1]['execTime'] + '(' + str(query[0])  + 's)')
+    print('file : ' + query[1]['file'])
+    print('totalTasks : ' + str(query[1]['totalTasks']))
+    print('peakRunningTasks : ' + str(query[1]['peakRunningTasks']))
+    print('totalCpuTime : ' + str(query[1]['totalCpuTime']))
+    print('totalBlockedTime : ' + query[1]['totalBlockedTime'])
+    print('shuffledDataSize : ' + query[1]['shuffledDataSize'])
+    if ('stageState' in query[1]):
+      print('Stage State')
+      for state in query[1]['stageState']:
+        print(state[1])
+    if (len(query[1]['opSummaries']) > 0):
+      print('Operators')
+      for summary in query[1]['opSummaries']:
+        print(summary[1])
+    else:
+      print("Skipping Operators. OutputWall too small for operator collection.")
+
+def main():
+  parser = create_parser()
+  (options, args) = parser.parse_args()
+
+  if (len(args) != 1):
+      sys.exit("Specify the input json file or directory.")
+
+  jsonfiles = []
+
+  if os.path.isfile(args[0]):
+    jsonfiles.append(args[0])
+  else:
+    for subdir, dirs, files in os.walk(args[0]):
+      for file in files:
+          jsonfiles.append(os.path.join(subdir, file))
+
+  failed = []
+  queries = []
+  for file in jsonfiles:
+    jsonfile = open(file)
+    data = json.load(jsonfile)
+
+    root = {}
+    root['file'] = file;
+    if (data['state'] == 'FAILED'):
+      failed.append(file)
+
+    if (options.stagestate) :
+      stages = []
+      states = []
+      stages.append(data['outputStage'])
+      while (len(stages) > 0):
+        stage = stages.pop(0)
+        offset = stage['stageId'].index('.')
+        stageId = stage['stageId'][offset + 1:]
+        state = stage['latestAttemptExecutionInfo']['state']
+        states.append((int(stageId), {"Stage " + stageId + ' : ' + state}))
+        stages += stage['subStages']
+      sorted_states = sorted(states, key = lambda x: x[0])
+      root['stageState'] = sorted_states
+
+    root['query'] = data['query'];
+    queryStats = data['queryStats'];
+    root['execTime'] = queryStats['executionTime'];
+    timeVal = time_val(root['execTime'])
+
+    root['totalTasks'] = queryStats['totalTasks'];
+    root['peakRunningTasks'] = queryStats['peakRunningTasks'];
+    root['totalDrivers'] = queryStats['totalDrivers'];
+    root['totalCpuTime'] = queryStats['totalCpuTime'];
+    root['totalBlockedTime'] = queryStats['totalBlockedTime'];
+    root['shuffledDataSize'] = queryStats['shuffledDataSize']; 
+
+    opSummaries = queryStats['operatorSummaries'];
+    summaries = []
+    for s in opSummaries:
+      opVal = time_val(s['getOutputWall'])
+      if (opVal > options.opwall_s) :
+        summaries.append((time_val(s['getOutputWall']), 
+                          {'s':s['stageId'],
+                          'p':s['planNodeId'],
+                          'o':s['operatorType'],
+                          'd':s['totalDrivers'],
+                          'outputWall':s['getOutputWall'],
+                          'inputWall':s['addInputWall'],
+                          'blockedWall':s['blockedWall'],
+                          'outputRows':s['outputPositions'], 
+                          }));
+    
+    sorted_summaries = sorted(summaries, key = lambda x: x[0], reverse = True)
+    root['opSummaries'] = sorted_summaries;
+    jsonfile.close()
+    queries.append((timeVal, root));
+
+  if (len(failed) > 0):
+    printFailed(failed)
+
+  printSorted(queries)
+
+if __name__ == '__main__':
+    main()
