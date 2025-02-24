@@ -9,9 +9,9 @@ import os
 from optparse import OptionParser
 
 def create_parser():
-  parser = OptionParser(prog='queryjson', usage='usage: %prog [options] path', description="Analyze a Presto Query JSON document. If multiple queries are provided the output is ordered by execution time longest to shortest.")
-  parser.add_option('--stagestate', action='store_true', default=False, help='Collect and print stage and state information')
-  parser.add_option('--opwall', action='store', default=0, type="int", dest="opwall_s", help='Operator Wall time in seconds to show operator details (Default: 0)')
+  parser = OptionParser(prog='queryjson', usage='usage: %prog [options] path', description="Analyze Presto UI Query Json files. If multiple query files are provided, the output is ordered by execution time longest to shortest.")
+  parser.add_option('--stagestate', action='store_true', default=False, help='Collect and print stage status information')
+  parser.add_option('--opwall', action='store', default=0, type="int", dest="opwall_s", help='Minimum Operator Wall time in seconds to show operator details (Default: 0)')
   return parser
 
 def time_val(tstr):
@@ -119,14 +119,12 @@ def main():
       opVal = time_val(s['getOutputWall'])
       if (opVal > options.opwall_s) :
         summaries.append((time_val(s['getOutputWall']), 
-                          {'s':s['stageId'],
-                          'p':s['planNodeId'],
-                          'o':s['operatorType'],
-                          'd':s['totalDrivers'],
+                          {'stage':s['stageId'],
+                          'opName':s['operatorType'],
+                          'numDrivers':s['totalDrivers'],
                           'outputWall':s['getOutputWall'],
                           'inputWall':s['addInputWall'],
                           'blockedWall':s['blockedWall'],
-                          'outputRows':s['outputPositions'], 
                           }));
     
     sorted_summaries = sorted(summaries, key = lambda x: x[0], reverse = True)
