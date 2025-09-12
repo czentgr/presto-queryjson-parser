@@ -12,6 +12,7 @@ def create_parser():
   parser = OptionParser(prog='queryjson', usage='usage: %prog [options] path', description="Analyze Presto UI Query Json files. If multiple query files are provided, the output is ordered by execution time longest to shortest.")
   parser.add_option('--stagestate', action='store_true', default=False, help='Collect and print stage status information')
   parser.add_option('--opwall', action='store', default=0, type="int", dest="opwall_s", help='Minimum Operator Wall time in seconds to show operator details (Default: 0)')
+  parser.add_option('--sortby', action='store', default='getOutputWall', type="string", dest="sort_key", help='Sort field (Default: \'getOutputWall\'. Other fields: \'addInputWall\', \'blockedWall\')')
   return parser
 
 def time_val(tstr):
@@ -37,10 +38,9 @@ def printFailed(queries):
     print(query)
   print('')
 
-def printSorted(queries):
+def printSorted(queries, sort_key):
   sorted_queries = sorted(queries, key = lambda x: x[0], reverse = True) 
   print('Sorted Queries')
-  print('s: stageId, p: planNode, o: operatorName, d:DriverCount')
   for query in sorted_queries:
     print('execTime : ' + query[1]['execTime'] + '(' + str(query[0])  + 's)')
     print('file : ' + query[1]['file'])
@@ -54,7 +54,7 @@ def printSorted(queries):
       for state in query[1]['stageState']:
         print(state[1])
     if (len(query[1]['opSummaries']) > 0):
-      print('Operators')
+      print('Top Operators sorted by ' + sort_key)
       for summary in query[1]['opSummaries']:
         print(summary[1])
     else:
@@ -115,10 +115,11 @@ def main():
 
     opSummaries = queryStats['operatorSummaries'];
     summaries = []
+    key = options.sort_key
     for s in opSummaries:
-      opVal = time_val(s['getOutputWall'])
+      opVal = time_val(s[key])
       if (opVal > options.opwall_s) :
-        summaries.append((time_val(s['getOutputWall']), 
+        summaries.append((time_val(s[key]),
                           {'stage':s['stageId'],
                           'opName':s['operatorType'],
                           'numDrivers':s['totalDrivers'],
@@ -135,7 +136,7 @@ def main():
   if (len(failed) > 0):
     printFailed(failed)
 
-  printSorted(queries)
+  printSorted(queries, options.sort_key)
 
 if __name__ == '__main__':
     main()
