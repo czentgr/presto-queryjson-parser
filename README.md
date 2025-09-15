@@ -1,5 +1,5 @@
 # presto-queryjson-parser
-A Python parser to read Presto query json files
+A Python parser to read Presto query json files. 
 Given a path to a query json file or a folder with query json files, the parser
 1) Filters failed queries.
 2) Sorts queries from slowest to fastest and prints operators with outputWall greater than a second.
@@ -16,6 +16,8 @@ Options:
   --stagestate       Collect and print stage and state information
   --opwall=OPWALL_S  Operator Wall time in seconds to show operator details
                      (Default: 0)
+  --sortby=SORT_KEY  Sort field (Default: 'getOutputWall'. Other fields:
+                     'addInputWall', 'blockedWall')
 ```
 
 The program can be executed as a program or as input to python3.  
